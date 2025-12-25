@@ -1,0 +1,13 @@
+{
+    "policy_version": "1.0" ,
+    "command": "curl",
+    "network_policies": {
+        "allowed_domains": ["*"]
+        },
+    "filesystem_policies": {
+        "allowed_write_dirs": ["*"]
+        },
+    "security_policies": {
+        "blocked_environment": ["PASSWORD"]
+        }
+}
