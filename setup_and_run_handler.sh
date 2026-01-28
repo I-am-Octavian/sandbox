@@ -26,7 +26,7 @@ install_dependencies() {
         ubuntu|debian)
             echo "Detected Debian/Ubuntu system"
             sudo apt update
-            sudo apt install -y clang libelf1 libelf-dev zlib1g-dev llvm libjson-c-dev git make gcc
+            sudo apt install -y clang libelf1 libelf-dev zlib1g-dev llvm libjson-c-dev git make gcc libcjson-dev
             ;;
         fedora|rhel|centos)
             echo "Detected Fedora/RHEL/CentOS system"
