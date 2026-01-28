@@ -67,7 +67,7 @@ If you prefer to install dependencies manually:
 ### Ubuntu/Debian:
 ```bash
 sudo apt update
-sudo apt install -y clang libelf1 libelf-dev zlib1g-dev llvm libjson-c-dev git make gcc
+sudo apt install -y clang libelf1 libelf-dev zlib1g-dev llvm libjson-c-dev git make gcc libcjson-dev
 ```
 
 ### Fedora/RHEL:
