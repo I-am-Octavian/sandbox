@@ -33,6 +33,7 @@ enum policy_id {
 	
 	// File System Policies
 	POLICY_FS_001_WRITE_PATH,   // Blocked write to non-whitelisted path
+	POLICY_FS_001_READ_PATH,
 	POLICY_FS_006_SYS_PATH,     // Blocked access to system path
 };
 
