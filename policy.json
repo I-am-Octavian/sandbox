@@ -1,11 +1,12 @@
 {
     "policy_version": "1.0" ,
-    "command": "curl",
+    "command": "cat",
     "network_policies": {
         "allowed_domains": ["*"]
         },
     "filesystem_policies": {
-        "allowed_write_dirs": ["*"]
+        "allowed_write_dirs": ["*"],
+        "blocked_read_dirs": []
         },
     "security_policies": {
         "blocked_environment": ["PASSWORD"]
