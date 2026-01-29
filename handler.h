@@ -35,6 +35,7 @@ enum policy_id {
  * Enum to distinguish event types in the union.
  */
 enum event_type {
+	EVENT_NET,
 	EVENT_FS,
 };
 
@@ -43,6 +44,11 @@ enum event_type {
  */
 struct fs_event_t {
 	char path[MAX_PATH_LEN];
+};
+
+struct net_event_t {
+	__u32 dest_ip;
+	__u16 dest_port;
 };
 
 /*
