@@ -444,7 +444,7 @@ int BPF_PROG(handle_file_open, struct file *file)
 		__u32 *is_blocked = bpf_map_lookup_elem(&blocked_read_paths, &key);
 
 		if (is_blocked) {
-			log_fs_violation(ctx, POLICY_FS_001_READ_PATH, path_buf);
+			log_fs_violation(ctx, POLICY_FS_002_READ_PATH, path_buf);
 			return -EPERM;
 		}
 	}
