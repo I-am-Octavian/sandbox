@@ -13,8 +13,7 @@
 #include "handler.h"
 
 // Definitions taken from linux source code
-#define AF_INET	   2
-#define AF_INET6   10
+
 #define O_APPEND   00002000
 #define O_TRUNC	   00001000
 #define O_CREAT	   00000100
@@ -46,13 +45,6 @@ struct {
 	__type(key, __u32);
 	__type(value, char[MAX_COMMAND_LEN]);
 } command_to_sandbox SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 128);
-	__type(key, __u32);
-	__type(value, __u32);
-} allowed_ips SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -336,113 +328,6 @@ int handle_exit(struct trace_event_raw_sched_process_template *ctx)
 	return 0;
 }
 
-/*
- * Args:
- * - struct socket *sock
- * - struct sockaddr *uaddr
- * - int addr_len
- */
-SEC("lsm/socket_connect")
-int BPF_PROG(handle_socket_connect, struct socket *sock, struct sockaddr *uaddr, int addr_len)
-{
-	// Check if we are sandboxing this process
-	__u64 pid_tgid = bpf_get_current_pid_tgid();
-	if (!bpf_map_lookup_elem(&sandboxed_pid, &pid_tgid)) {
-		return 0;
-	}
-
-	bpf_printk("[sandbox-lsm] handle_socket_connect PID: %d\n", (pid_t)(pid_tgid >> 32));
-
-	__u32 net_key = TOGGLE_KEY_NET;
-	__u32 *net_toggle = bpf_map_lookup_elem(&policy_toggle_map, &net_key);
-
-	if (net_toggle) {
-		// Key exists = wildcard is active
-		bpf_printk("[sandbox-lsm] Network wildcard active, allowing all\n");
-		return 0;
-	}
-
-	// Read socket family
-	sa_family_t sa_family;
-	if (bpf_probe_read_kernel(&sa_family, sizeof(sa_family), &uaddr->sa_family)) {
-		// Failed to read, block just in case
-		bpf_printk("[sandbox-lsm] Blocked: Failed to read sa_family\n");
-		return -EPERM;
-	}
-
-	bpf_printk("[sandbox-lsm] sa_family: %d\n", sa_family);
-
-	// Handle IPv4
-	if (sa_family == AF_INET) {
-		struct sockaddr_in sa_in;
-		if (bpf_probe_read_kernel(&sa_in, sizeof(sa_in), uaddr)) {
-			bpf_printk("[sandbox-lsm] Blocked: Failed to read sockaddr_in\n");
-			return -EPERM;
-		}
-
-		__u16 dest_port_n = sa_in.sin_port;
-		__u32 dest_ip_n = sa_in.sin_addr.s_addr;
-
-		// Convert from network to host byte order for comparisons
-		__u16 dest_port_h = bpf_ntohs(dest_port_n);
-		__u32 dest_ip_h = bpf_ntohl(dest_ip_n);
-
-		bpf_printk("[sandbox-lsm] Attemping connect to (IPv4) %x:%d\n", dest_ip_h,
-			   dest_port_h);
-
-		// Policy NET-006: Allow only ports 80 and 443
-		// if (dest_port_h != 80 && dest_port_h != 443) {
-		// 	bpf_printk("[sandbox-lsm] Blocked: Port %d (NET-006)\n", dest_port_h);
-		// 	log_net_violation(ctx, POLICY_NET_006_PORT, dest_ip_h, dest_port_h);
-		// 	return -EPERM;
-		// }
-
-		// Policy NET-005: Block private IP ranges
-		// 10.0.0.0/8
-		// if ((dest_ip_h >> 24) == 10) {
-		// 	bpf_printk("[sandbox-lsm] Blocked: Private IP 10.x.x.x (NET-005)\n");
-		// 	log_net_violation(ctx, POLICY_NET_005_PRIVATE_IP, dest_ip_h, dest_port_h);
-		// 	return -EPERM;
-		// }
-		// 172.16.0.0/12
-		// if ((dest_ip_h >> 24) == 172 && (dest_ip_h >> 16 & 0xF0) == 16) {
-		// 	bpf_printk("[sandbox-lsm] Blocked: Private IP 172.16.x.x (NET-005)\n");
-		// 	log_net_violation(ctx, POLICY_NET_005_PRIVATE_IP, dest_ip_h, dest_port_h);
-		// 	return -EPERM;
-		// }
-		// 192.168.0.0/16
-		// if ((dest_ip_h >> 24) == 192 && (dest_ip_h >> 16 & 0xFF) == 168) {
-		// 	bpf_printk("[sandbox-lsm] Blocked: Private IP 192.168.x.x (NET-005)\n");
-		// 	log_net_violation(ctx, POLICY_NET_005_PRIVATE_IP, dest_ip_h, dest_port_h);
-		// 	return -EPERM;
-		// }
-
-		// Policy NET-001: Whitelisted Domains (by IP)
-		if (bpf_map_lookup_elem(&allowed_ips, &dest_ip_h) == NULL) {
-			// IP not in whitelist
-			bpf_printk("[sandbox-lsm] Blocked: IP %x not in whitelist (NET-001)\n",
-				   dest_ip_h);
-			log_net_violation(ctx, POLICY_NET_001_WHITELIST, dest_ip_h, dest_port_h);
-			return -EPERM;
-		}
-
-		// If we get here, all checks passed.
-		bpf_printk("[sandbox-lsm] Allowed connect to %x:%d\n", dest_ip_h, dest_port_h);
-		return 0; // Allow
-	}
-
-	// Handle IPv6 (Allow for now, as policies are IPv4-based)
-	if (sa_family == AF_INET6) {
-		bpf_printk("[sandbox-lsm] Allowing IPv6 connection\n");
-		return 0;
-	}
-
-	// Block all other families (AF_UNIX, etc.)
-	// bpf_printk("[sandbox-lsm] Blocked: Non-IP socket family %d\n", sa_family);
-	// log_net_violation(ctx, POLICY_NET_002_FAMILY, 0, 0);
-	return -EPERM;
-}
-
 SEC("lsm/file_open")
 int BPF_PROG(handle_file_open, struct file *file)
 {
@@ -521,7 +406,7 @@ int BPF_PROG(handle_file_open, struct file *file)
 	}
 
 	int access_mode = flags & 3;
-	int is_read = (access_mode == 0) || (access_mode == O_RDWR);
+	int is_read = (access_mode == O_RDONLY) || (access_mode == O_RDWR);
 
 	if (is_read) {
 

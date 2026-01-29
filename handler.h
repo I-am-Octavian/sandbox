@@ -24,16 +24,10 @@
 /*
  * Enum for identifying which policy was violated.
  */
-enum policy_id {
-	// Network Policies
-	POLICY_NET_001_WHITELIST,   // Blocked by domain whitelist
-	POLICY_NET_002_FAMILY,      // Blocked non-AF_INET
-	POLICY_NET_005_PRIVATE_IP,  // Blocked private IP
-	POLICY_NET_006_PORT,        // Blocked non-80/443 port
-	
+enum policy_id {	
 	// File System Policies
 	POLICY_FS_001_WRITE_PATH,   // Blocked write to non-whitelisted path
-	POLICY_FS_001_READ_PATH,
+	POLICY_FS_002_READ_PATH,
 	POLICY_FS_006_SYS_PATH,     // Blocked access to system path
 };
 
@@ -41,16 +35,7 @@ enum policy_id {
  * Enum to distinguish event types in the union.
  */
 enum event_type {
-	EVENT_NET,
 	EVENT_FS,
-};
-
-/*
- * Data structure for network violation events.
- */
-struct net_event_t {
-	__u32 dest_ip;
-	__u16 dest_port;
 };
 
 /*
@@ -78,7 +63,6 @@ struct log_event {
 
 enum policy_toggle_key {
     TOGGLE_KEY_NONE= 0,
-    TOGGLE_KEY_NET,
     TOGGLE_KEY_FS,
     TOGGLE_KEY_ENV,
 };

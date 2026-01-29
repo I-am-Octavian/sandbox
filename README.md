@@ -122,12 +122,10 @@ PS: The policy also supports `*`(Wildcard) operation for allowed_domains, filesy
 ```
 {
     "policy_version": "1.0" ,
-    "command": "curl",
-    "network_policies": {
-        "allowed_domains": ["*"]
-        },
+    "command": "cat",
     "filesystem_policies": {
-        "allowed_write_dirs": ["*"]
+        "allowed_write_dirs": ["*"],
+        "blocked_read_dirs": []
         },
     "security_policies": {
         "blocked_environment": ["PASSWORD"]

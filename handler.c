@@ -39,36 +39,16 @@
 const char *policy_to_string(enum policy_id p)
 {
 	switch (p) {
-	case POLICY_NET_001_WHITELIST:
-		return "NET-001 (Whitelist)";
-	case POLICY_NET_002_FAMILY:
-		return "NET-002 (Protocol Family)";
-	case POLICY_NET_005_PRIVATE_IP:
-		return "NET-005 (Private IP)";
-	case POLICY_NET_006_PORT:
-		return "NET-006 (Port)";
 	// NEW: Add FS policies
 	case POLICY_FS_001_WRITE_PATH:
 		return "FS-001 (Write Path)";
-	case POLICY_FS_001_READ_PATH:
-		return " FS -001 ( Read Path ) " ;
+	case POLICY_FS_002_READ_PATH:
+		return " FS -002 ( Read Path ) " ;
 	case POLICY_FS_006_SYS_PATH:
 		return "FS-006 (System Path)";
 	default:
 		return "Unknown";
 	}
-}
-
-/*
- * Converts an IP address from __u32 (host byte order) to a string.
- */
-static char *ip_to_string(__u32 ip)
-{
-	static __thread char ip_str[INET_ADDRSTRLEN];
-	struct in_addr addr = { .s_addr =
-					htonl(ip) }; // Convert back to network order for inet_ntop
-	inet_ntop(AF_INET, &addr, ip_str, sizeof(ip_str));
-	return ip_str;
 }
 
 static volatile bool exiting = false;
@@ -220,7 +200,6 @@ static int load_policy_from_json(struct handler_bpf *skel, const char *json_path
 
 	printf("[Daemon] Clearing all old policies...\n");
 	clear_command_map(skel->maps.command_to_sandbox);
-	clear_hash_map(skel->maps.allowed_ips);
 	clear_lpm_map(skel->maps.allowed_write_paths);
 	clear_hash_map(skel->maps.blocked_env_keys);
 	clear_hash_map(skel->maps.policy_toggle_map);
@@ -277,77 +256,6 @@ static int load_policy_from_json(struct handler_bpf *skel, const char *json_path
 		}
 	} else {
 		printf("[Daemon] 'command' key not found or not a string.\n");
-	}
-
-	// --- 1. Populate Network Policy (NET-001) ---
-	printf("[Loader] Loading Network Policies (NET-001)...\n");
-
-	// FIX: Get the "network_policies" object first
-	cJSON *net_policies = cJSON_GetObjectItem(root, "network_policies");
-	cJSON *domains_array = NULL;
-	if (cJSON_IsObject(net_policies)) {
-		// FIX: Now get "allowed_domains" from *that* object
-		domains_array = cJSON_GetObjectItem(net_policies, "allowed_domains");
-	}
-
-	if (cJSON_IsArray(domains_array)) {
-		int array_size = cJSON_GetArraySize(domains_array);
-
-		if (array_size == 1) {
-			cJSON *first = cJSON_GetArrayItem(domains_array, 0);
-			const char *domain = cJSON_GetStringValue(first);
-			if (domain && strcmp(domain, "*") == 0) {
-				printf("[Loader] Network wildcard detected\n");
-				__u32 net_key = TOGGLE_KEY_NET;
-				__u32 wildcard_val = 1; // Value doesn't matter, just presence
-				bpf_map__update_elem(skel->maps.policy_toggle_map, &net_key,
-						     sizeof(net_key), &wildcard_val,
-						     sizeof(wildcard_val), BPF_ANY);
-				domains_array = NULL;
-			}
-		}
-
-		cJSON *item;
-		cJSON_ArrayForEach(item, domains_array)
-		{
-			const char *domain = cJSON_GetStringValue(item);
-			if (!domain)
-				continue;
-
-			printf("[Debug]   Found domain: '%s'\n", domain);
-
-			struct hostent *h = gethostbyname(domain);
-			if (!h) {
-				fprintf(stderr,
-					"[Debug]   Warning: Could not resolve domain '%s'\n",
-					domain);
-				continue;
-			}
-
-			printf("[Debug]   -> Resolving... ");
-			for (int j = 0; h->h_addr_list[j]; j++) {
-				struct in_addr *addr = (struct in_addr *)h->h_addr_list[j];
-				__u32 ip_h = ntohl(addr->s_addr); // Host byte order
-
-				printf("%s ", inet_ntoa(*addr));
-
-				// Add to allowed_ips map
-				err = bpf_map__update_elem(skel->maps.allowed_ips, &ip_h,
-							   sizeof(ip_h), &ip_h, sizeof(ip_h),
-							   BPF_ANY);
-				if (err) {
-					fprintf(stderr,
-						"\n[Debug]   -> ERROR adding IP to map: %s\n",
-						strerror(errno));
-				} else {
-					printf("(Added) ");
-				}
-			}
-			printf("\n");
-		}
-	} else {
-		// FIX: Updated error message for clarity
-		printf("[Loader] 'network_policies.allowed_domains' key not found or not an array.\n");
 	}
 
 	// --- 2. Populate Filesystem Policy (FS-001) ---
